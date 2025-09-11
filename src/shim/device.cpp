@@ -713,6 +713,8 @@ struct archive_path
         return std::string(get_shim_data_dir() + "bins/xrt_smi_strx.a");
       case xrt_core::smi::smi_hardware_config::hardware_type::phx:
         return std::string(get_shim_data_dir() + "bins/xrt_smi_phx.a");
+      case xrt_core::smi::smi_hardware_config::hardware_type::npu3_f3:
+        return std::string(get_shim_data_dir() + "bins/xrt_smi_npu3.a");
       default:
         throw xrt_core::error("Unsupported hardware type");
       }
@@ -1363,6 +1365,9 @@ struct runner{
         break;
       case xrt_core::smi::smi_hardware_config::hardware_type::phx:
         file_name += "_phx.json";
+        break;
+      case xrt_core::smi::smi_hardware_config::hardware_type::npu3_f3:
+        file_name += "_npu3.json";
         break;
       default:
         // For all other hardware types, we assume the runner is not available
