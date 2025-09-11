@@ -756,6 +756,8 @@ struct archive_path
         return std::string(get_shim_data_dir() + "bins/xrt_smi_strx.a");
       case xrt_core::smi::smi_hardware_config::hardware_type::phx:
         return std::string(get_shim_data_dir() + "bins/xrt_smi_phx.a");
+      case xrt_core::smi::smi_hardware_config::hardware_type::npu3_f3:
+        return std::string(get_shim_data_dir() + "bins/xrt_smi_npu3.a");
       default:
         throw xrt_core::error("Unsupported hardware type");
       }
