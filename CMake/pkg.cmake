@@ -91,7 +91,7 @@ FetchContent_Declare(
 
 FetchContent_Declare(
   vtd_npu3_archive
-  URL "https://github.com/Xilinx/VTD/raw/c079da4dcec1da1e84094ddcf817afceae44d2df/runner/xrt_smi_npu3.a"
+  URL "https://github.com/Xilinx/VTD/raw/f3358ce31008d36a85ad45c8447c7b7756b1cdc0/runner/npu3/xrt_smi_npu3.a"
   DOWNLOAD_NO_EXTRACT ON
   DOWNLOAD_DIR "${CMAKE_CURRENT_BINARY_DIR}/vtd_downloads"
 )
