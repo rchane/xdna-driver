@@ -600,6 +600,12 @@ skip_pasid:
 		ret = -ENOMEM;
 		goto disable_sva;
 	}
+
+	ret = aie2_error_async_cache_init(ndev);
+	if (ret) {
+		XDNA_ERR(xdna, "failed to init async error cache, ret %d", ret);
+		goto disable_sva;
+	}
 	xdna->dev_handle = ndev;
 
 	ret = aie2_hw_start(xdna);
@@ -1212,8 +1218,8 @@ static int aie2_query_ctx_status_array(struct amdxdna_client *client,
 	struct app_health_report *r;
 	struct amdxdna_ctx *ctx;
 	unsigned long id;
+	int ret = 0, idx;
 	u32 hw_i = 0;
-	int ret, idx;
 
 	r = aie2_mgmt_buff_alloc(xdna->dev_handle, &mgmt_hdl, sizeof(*r), DMA_FROM_DEVICE);
 	if (!r) {
@@ -1271,8 +1277,17 @@ static int aie2_query_ctx_status_array(struct amdxdna_client *client,
 				ret = aie2_get_app_health(xdna->dev_handle, &mgmt_hdl,
 							  ctx->priv->id, sizeof(*r));
 				mutex_unlock(&xdna->dev_handle->aie2_lock);
-				if (ret)
+				if (ret) {
 					aie2_reset_app_health_report(r);
+					/*
+					 * App health information is optional and may be
+					 * unsupported on certain device generations or
+					 * firmware versions. Other information can still be
+					 * valid even if app health is unavailable.
+					 */
+					if (ret == -EOPNOTSUPP)
+						ret = 0;
+				}
 			} else {
 				aie2_reset_app_health_report(r);
 			}
@@ -1363,6 +1378,13 @@ static int aie2_get_array(struct amdxdna_client *client, struct amdxdna_drm_get_
 		ret = aie2_query_ctx_status_array(client, tmp, input.pid, input.context_id);
 		if (ret)
 			goto exit;
+
+		break;
+	case DRM_AMDXDNA_HW_LAST_ASYNC_ERR:
+		ret = aie2_error_get_last_async(xdna, args->num_element, tmp);
+		if (ret < 0)
+			goto exit;
+		ctx_cnt = ret;
 
 		break;
 	default:

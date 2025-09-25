@@ -10,6 +10,7 @@
 
 #include "core/common/query_requests.h"
 #include "core/include/ert.h"
+#include "core/include/xclerr_int.h"
 #include <sys/syscall.h>
 #include <algorithm>
 #include <libgen.h>
@@ -450,6 +451,45 @@ struct context_health_info {
 
       auto* data = reinterpret_cast<amdxdna_drm_hwctx_entry*>(payload.data());
       output.push_back(fill_health_entry(*data));
+    }
+    return output;
+  }
+};
+
+struct xocl_errors
+{
+  using result_type = std::any;
+
+  static result_type
+  get(const xrt_core::device* device, key_type key)
+  {
+    if (key != key_type::xocl_errors)
+      throw xrt_core::query::no_such_key(key, "Not implemented");
+
+    // Query all contexts
+    amdxdna_async_error* data;
+    const uint32_t drv_output = 32 * sizeof(*data);
+    std::vector<char> payload(drv_output);
+    amdxdna_drm_get_array arg = {
+      .param = DRM_AMDXDNA_HW_LAST_ASYNC_ERR,
+      .element_size = sizeof(*data),
+      .num_element = 32,
+      .buffer = reinterpret_cast<uintptr_t>(payload.data())
+    };
+
+    auto& pci_dev_impl = get_pcidev_impl(device);
+    uint32_t data_size = 0;
+    pci_dev_impl.drv_ioctl(shim_xdna::drv_ioctl_cmd::get_info_array, &arg);
+    data_size = arg.num_element;
+    data = reinterpret_cast<decltype(data)>(payload.data());
+
+    query::xocl_errors::result_type output(sizeof(xcl_errors));
+    xcl_errors *out_xcl_errors = reinterpret_cast<xcl_errors*>(output.data());
+    out_xcl_errors->num_err = arg.num_element;
+    for (uint32_t i = 0; i < arg.num_element; i++) {
+      out_xcl_errors->errors[i].err_code = data[i].err_code;
+      out_xcl_errors->errors[i].ts = data[i].ts_us;
+      out_xcl_errors->errors[i].ex_error_code = data[i].ex_err_code;
     }
     return output;
   }
@@ -1243,142 +1283,6 @@ struct xrt_smi_lists
   }
 };
 
-struct runner{
-  static std::any
-  get(const xrt_core::device* /*device*/, key_type key)
-  {
-    throw xrt_core::query::no_such_key(key, "Not implemented");
-  }
-
-  static std::any
-  get(const xrt_core::device* device, key_type key, const std::any& param)
-  {
-    if (key != key_type::runner)
-      throw xrt_core::query::no_such_key(key, "Not implemented");
-
-    const auto& pcie_id = xrt_core::device_query<xrt_core::query::pcie_id>(device);
-    xrt_core::smi::smi_hardware_config smi_hrdw;
-    auto hardware_type = smi_hrdw.get_hardware_type(pcie_id);
-
-    std::string file_name;
-    std::string path;
-    const auto runner_type = std::any_cast<xrt_core::query::runner::type>(param);
-    switch (runner_type) {
-    case xrt_core::query::runner::type::throughput_path:
-      path = std::string("bins/Runner/throughput/"); 
-      break;
-    case xrt_core::query::runner::type::throughput_recipe:
-      file_name = std::string("Runner/throughput/recipe_throughput");
-      break;
-    case xrt_core::query::runner::type::throughput_profile:
-      file_name = std::string("Runner/throughput/profile_throughput");
-      break;
-    case xrt_core::query::runner::type::latency_path:
-      path = std::string("bins/Runner/latency/");
-      break;
-    case xrt_core::query::runner::type::latency_recipe:
-      file_name = std::string("Runner/latency/recipe_latency");
-      break;
-    case xrt_core::query::runner::type::latency_profile:
-      file_name = std::string("Runner/latency/profile_latency");
-      break;
-    case xrt_core::query::runner::type::df_bandwidth_path:
-      path = std::string("bins/Runner/df_bandwidth/");
-      break;
-    case xrt_core::query::runner::type::df_bandwidth_recipe:
-      file_name = std::string("Runner/df_bandwidth/recipe_df_bandwidth");
-      break;
-    case xrt_core::query::runner::type::df_bandwidth_profile:
-      file_name = std::string("Runner/df_bandwidth/profile_df_bandwidth");
-      break;
-    case xrt_core::query::runner::type::gemm_path:
-      path = std::string("bins/Runner/gemm/");
-      break;
-    case xrt_core::query::runner::type::gemm_recipe:
-      file_name = std::string("Runner/gemm/recipe_gemm");
-      break;
-    case xrt_core::query::runner::type::gemm_profile:
-      file_name = std::string("Runner/gemm/profile_gemm");
-      break;
-    case xrt_core::query::runner::type::aie_reconfig_overhead_path:
-      path = std::string("bins/Runner/aie_reconfig_overhead/");
-      break;
-    case xrt_core::query::runner::type::aie_reconfig_overhead_recipe:
-      file_name = std::string("Runner/aie_reconfig_overhead/recipe_aie_reconfig");
-      break;
-    case xrt_core::query::runner::type::aie_reconfig_overhead_profile:
-      file_name = std::string("Runner/aie_reconfig_overhead/profile_aie_reconfig");
-      break;
-    case xrt_core::query::runner::type::aie_reconfig_overhead_nop_recipe:
-      file_name = std::string("Runner/aie_reconfig_overhead/recipe_aie_reconfig_nop");
-      break;
-    case xrt_core::query::runner::type::cmd_chain_latency_path:
-      path = std::string("bins/Runner/cmd_chain_latency/");
-      break;
-    case xrt_core::query::runner::type::cmd_chain_latency_recipe:
-      file_name = std::string("Runner/cmd_chain_latency/recipe_cmd_chain_latency");
-      break;
-    case xrt_core::query::runner::type::cmd_chain_latency_profile:
-      file_name = std::string("Runner/cmd_chain_latency/profile_cmd_chain_latency");
-      break;
-    case xrt_core::query::runner::type::cmd_chain_throughput_path:
-      path = std::string("bins/Runner/cmd_chain_throughput/");
-      break;
-    case xrt_core::query::runner::type::cmd_chain_throughput_recipe:
-      file_name = std::string("Runner/cmd_chain_throughput/recipe_cmd_chain_throughput");
-      break;
-    case xrt_core::query::runner::type::cmd_chain_throughput_profile:
-      file_name = std::string("Runner/cmd_chain_throughput/profile_cmd_chain_throughput");
-      break;
-    case xrt_core::query::runner::type::tct_one_column_recipe:
-      file_name = std::string("Runner/tct_one_column/recipe_tct_one_column");
-      break;
-    case xrt_core::query::runner::type::tct_one_column_profile:
-      file_name = std::string("Runner/tct_one_column/profile_tct_one_column");
-      break;
-    case xrt_core::query::runner::type::tct_one_column_path:
-      path = std::string("bins/Runner/tct_one_column/");
-      break;
-    case xrt_core::query::runner::type::tct_all_column_recipe:
-      file_name = std::string("Runner/tct_all_column/recipe_tct_all_column");
-      break;
-    case xrt_core::query::runner::type::tct_all_column_profile:
-      file_name = std::string("Runner/tct_all_column/profile_tct_all_column");
-      break;
-    case xrt_core::query::runner::type::tct_all_column_path:
-      path = std::string("bins/Runner/tct_all_column/");
-      break;
-    default:
-      throw xrt_core::query::no_such_key(key, "Not implemented");
-    }
-
-    if (!path.empty())
-      return get_shim_data_dir() + path;
-
-    switch (hardware_type)
-    {
-      case xrt_core::smi::smi_hardware_config::hardware_type::stxA0:
-      case xrt_core::smi::smi_hardware_config::hardware_type::stxB0:
-      case xrt_core::smi::smi_hardware_config::hardware_type::stxH:
-      case xrt_core::smi::smi_hardware_config::hardware_type::krk1:
-        file_name += "_strx.json";
-        break;
-      case xrt_core::smi::smi_hardware_config::hardware_type::phx:
-        file_name += "_phx.json";
-        break;
-      case xrt_core::smi::smi_hardware_config::hardware_type::npu3_f3:
-        file_name += "_npu3.json";
-        break;
-      default:
-        // For all other hardware types, we assume the runner is not available
-        throw xrt_core::query::no_such_key(key, "Test not supported on this device type");
-    } 
-
-    return get_shim_data_dir() + boost::str(boost::format("bins/%s")
-      % file_name);
-  }
-};
-
 struct xclbin_name
 {
   static std::any
@@ -1633,6 +1537,7 @@ static void
 initialize_query_table()
 {
   emplace_func0_request<query::aie_partition_info,             partition_info>();
+  emplace_func0_request<query::xocl_errors,                    xocl_errors>();
   emplace_func1_request<query::context_health_info,           context_health_info>();
   emplace_func0_request<query::aie_status_version,             aie_info>();
   emplace_func0_request<query::aie_tiles_stats,                aie_info>();
@@ -1681,7 +1586,6 @@ initialize_query_table()
   emplace_func1_request<query::sdm_sensor_info,                sensor_info>();
   emplace_func1_request<query::elf_name,                       elf_name>();
   emplace_func1_request<query::mobilenet,                      mobilenet>();
-  emplace_func1_request<query::runner,                         runner>();
   emplace_func1_request<query::xclbin_name,                    xclbin_name>();
   emplace_func1_request<query::xrt_smi_config,                 xrt_smi_config>();
   emplace_func1_request<query::xrt_smi_lists,                  xrt_smi_lists>();

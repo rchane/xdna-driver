@@ -17,15 +17,8 @@
 
 #include "amdxdna_ctx.h"
 #include "amdxdna_dpt.h"
-#ifdef AMDXDNA_OF
-/*
- * TODO: remove this and implement physical contiguous memory by carvedout memory
- * supported by amdxdna_gem.h"
- */
-#include "amdxdna_gem_of.h"
-#else
+#include "amdxdna_cma.h"
 #include "amdxdna_gem.h"
-#endif
 #include "amdxdna_tdr.h"
 
 #define XDNA_INFO(xdna, fmt, args...)	dev_info((xdna)->ddev.dev, fmt, ##args)
@@ -60,6 +53,8 @@ struct amdxdna_dev_ops {
 	void (*recover)(struct amdxdna_dev *xdna, bool dump_only);
 	int (*resume)(struct amdxdna_dev *xdna);
 	void (*suspend)(struct amdxdna_dev *xdna);
+	void (*reset_prepare)(struct amdxdna_dev *xdna);
+	int (*reset_done)(struct amdxdna_dev *xdna);
 	int (*mmap)(struct amdxdna_dev *xdna, struct vm_area_struct *vma);
 	void (*debugfs)(struct amdxdna_dev *xdna);
 	int (*fw_log_init)(struct amdxdna_dev *xdna, size_t size, u8 level);
@@ -137,6 +132,7 @@ struct amdxdna_dev {
 #endif
 	struct rw_semaphore		notifier_lock; /* for mmu notifier */
 	struct workqueue_struct		*notifier_wq;
+	bool				use_cma;
 };
 
 struct amdxdna_stats {
